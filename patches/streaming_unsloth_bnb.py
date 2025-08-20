@@ -195,20 +195,24 @@ def dequant_unsloth_expert_cpu(checkpoint_paths: List[str], layer_idx: int,
             # Apply blockwise absmax scaling
             # absmax contains scaling factors for blocks of the quantized weight
             if len(absmax.shape) == 1 and absmax.numel() > 1:
-                # Blockwise scaling - absmax has one entry per block
-                blocksize = total_params // absmax.numel()
-                if blocksize * absmax.numel() != total_params:
-                    # Handle partial blocks
-                    blocksize = 64  # fallback
+                # Prefer exact division; fallback to common group sizes
+                if total_params % absmax.numel() == 0:
+                    blocksize = total_params // absmax.numel()
+                    weight_fp = weight_fp.view(-1, blocksize) * absmax.unsqueeze(1)
+                    weight_fp = weight_fp.view(-1)
+                else:
+                    # Try common NF4 groups
+                    for candidate in (64, 128):
+                        if (total_params + candidate - 1) // candidate <= absmax.numel():
+                            blocksize = candidate
+                            break
+                    else:
+                        blocksize = 64
                     num_blocks = min((total_params + blocksize - 1) // blocksize, len(absmax))
                     for block_idx in range(num_blocks):
                         start_idx = block_idx * blocksize
                         end_idx = min(start_idx + blocksize, total_params)
                         weight_fp[start_idx:end_idx] *= absmax[block_idx]
-                else:
-                    # Perfect division - each absmax entry scales one block
-                    weight_fp = weight_fp.view(-1, blocksize) * absmax.unsqueeze(1)
-                    weight_fp = weight_fp.view(-1)
             else:
                 # Single scaling factor for all weights
                 weight_fp *= absmax.item() if absmax.numel() == 1 else absmax[0]
