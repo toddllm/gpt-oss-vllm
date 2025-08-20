@@ -67,7 +67,7 @@ def smoke_test():
         assert token_id is not None, "No token ID returned"
         
         # Multi-token test
-        logger.info("\nTesting 10-token generation...")
+        logger.info("\nTesting 10-token generation and streaming mode...")
         sampling_params.max_tokens = 10
         
         start_gen = time.time()
@@ -80,7 +80,37 @@ def smoke_test():
         logger.info(f"✓ Generated: '{generated}'")
         logger.info(f"✓ Tokens: {token_count}, Time: {gen_time:.3f}s")
         logger.info(f"✓ Tokens/sec: {token_count/gen_time:.1f}")
-        
+
+        # Optional streaming test via AsyncLLMEngine
+        try:
+            from vllm import AsyncEngineArgs, AsyncLLMEngine
+            engine_args = AsyncEngineArgs(
+                model="unsloth/gpt-oss-20b-unsloth-bnb-4bit",
+                quantization="bitsandbytes",
+                dtype="float16",
+                max_model_len=256,
+                gpu_memory_utilization=0.40,
+                trust_remote_code=True,
+                enforce_eager=True,
+            )
+            engine = AsyncLLMEngine.from_engine_args(engine_args)
+            import asyncio
+            async def run_stream():
+                request_id = "smoke-stream-1"
+                prompt = "Streaming test:"
+                results_generator = engine.generate(
+                    {request_id: prompt}, SamplingParams(max_tokens=5, temperature=0.0)
+                )
+                pieces = []
+                async for result in results_generator:
+                    for o in result.outputs:
+                        pieces.append(o.text)
+                return "".join(pieces)
+            stream_text = asyncio.get_event_loop().run_until_complete(run_stream())
+            logger.info(f"✓ Streaming generated: '{stream_text}'")
+        except Exception as e:
+            logger.warning(f"Streaming path not tested: {e}")
+
         logger.info("\n=== SMOKE TEST PASSED ===")
         logger.info("GPT-OSS is working on RTX 3090 with vLLM!")
         

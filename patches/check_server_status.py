@@ -6,6 +6,7 @@ Check server loading status and test when ready.
 import subprocess
 import time
 import requests
+import re
 
 def check_server_status():
     """Check if server is loaded and ready."""
@@ -28,7 +29,7 @@ def check_server_status():
     
     # Check server logs for completion
     try:
-        with open('server_log.txt', 'r') as f:
+        with open('server_log.txt', 'r', encoding='utf-8', errors='ignore') as f:
             log_content = f.read()
             
         if 'Application startup complete' in log_content:
@@ -36,16 +37,18 @@ def check_server_status():
             return True
         elif 'Converting layer' in log_content:
             # Extract last converted layer
-            lines = log_content.split('\n')
-            for line in reversed(lines):
-                if 'Converting layer' in line:
-                    print(f"⏳ Server loading: {line.split('Converting layer')[-1].strip()}")
-                    break
+            matches = re.findall(r"Converting layer\s+(\d+)/(\d+)", log_content)
+            if matches:
+                last = matches[-1]
+                print(f"⏳ Server loading: layer {last[0]}/{last[1]}")
+            else:
+                print("⏳ Server loading...")
             return False
-        elif 'ERROR' in log_content or 'ValueError' in log_content:
+        elif any(err in log_content for err in ['ERROR', 'ValueError', 'RuntimeError', 'AssertionError']):
             print("❌ Server encountered errors:")
-            error_lines = [line for line in log_content.split('\n') if 'ERROR' in line or 'ValueError' in line]
-            for line in error_lines[-3:]:  # Show last 3 errors
+            lines = log_content.split('\n')
+            error_lines = [line for line in lines if any(err in line for err in ['ERROR', 'ValueError', 'RuntimeError', 'AssertionError'])]
+            for line in error_lines[-5:]:  # Show last 5
                 print(f"   {line}")
             return False
         else:
