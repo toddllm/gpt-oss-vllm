@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and runtime artifacts
+*.log
+server_log*.txt
+smoke_test*.log
+model_loading.log
+
+# Virtual envs and env-specific files
+.env
+.venv
+
+# OS files
+.DS_Store
+
+# Local tooling
+.claude/
+.settings/
+*.local.json
